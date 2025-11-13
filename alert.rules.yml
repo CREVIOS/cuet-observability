@@ -1,0 +1,129 @@
+# Prometheus Alert Rules
+# Defines alerting conditions for CPU usage and application availability
+
+groups:
+  - name: application_alerts
+    interval: 15s
+    rules:
+      # Alert when application becomes unhealthy
+      - alert: ApplicationUnhealthy
+        expr: app_health_status == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: application
+          alert_type: availability
+        annotations:
+          summary: "Application is unhealthy"
+          description: "The demo application ({{ $labels.instance }}) has been reporting unhealthy status for more than 30 seconds."
+          impact: "Service may be unavailable or degraded"
+          action: "Check application logs and restart if necessary"
+          value: "{{ $value }}"
+
+      # Alert when application is down (no metrics received)
+      - alert: ApplicationDown
+        expr: up{job="demo-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: application
+          alert_type: availability
+        annotations:
+          summary: "Application is down"
+          description: "Prometheus cannot scrape metrics from demo-app. The service may be down."
+          impact: "Service is unavailable"
+          action: "Check if the application container is running and accessible"
+
+      # Alert for high response time
+      - alert: HighResponseTime
+        expr: app_response_time_seconds > 1
+        for: 2m
+        labels:
+          severity: warning
+          component: application
+          alert_type: performance
+        annotations:
+          summary: "High response time detected"
+          description: "Application response time is {{ $value }}s, which exceeds the threshold of 1s."
+          impact: "Users may experience slow service"
+          action: "Investigate application performance and check for resource constraints"
+
+  - name: system_alerts
+    interval: 15s
+    rules:
+      # Alert when CPU usage exceeds 70%
+      - alert: HighCPUUsage
+        expr: |
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 70
+        for: 1m
+        labels:
+          severity: warning
+          component: infrastructure
+          alert_type: resource
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value | humanize }}%, which exceeds the 70% threshold."
+          impact: "System performance may be degraded"
+          action: "Check running processes and consider scaling resources"
+
+      # Alert when application CPU usage exceeds 70%
+      - alert: HighApplicationCPU
+        expr: app_cpu_usage_percent > 70
+        for: 1m
+        labels:
+          severity: warning
+          component: application
+          alert_type: resource
+        annotations:
+          summary: "Application CPU usage is high"
+          description: "Application CPU usage is {{ $value | humanize }}%, which exceeds the 70% threshold."
+          impact: "Application performance may be affected"
+          action: "Investigate application load and optimize if necessary"
+
+      # Alert for high memory usage (>80%)
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          component: infrastructure
+          alert_type: resource
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage on {{ $labels.instance }} is {{ $value | humanize }}%, which exceeds the 80% threshold."
+          impact: "System may experience memory pressure"
+          action: "Check memory-intensive processes and consider increasing memory"
+
+      # Alert when disk space is low (<10% free)
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          component: infrastructure
+          alert_type: resource
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space on {{ $labels.instance }} is below 10% ({{ $value | humanize }}% remaining)."
+          impact: "System may fail to write data"
+          action: "Clean up disk space or expand storage"
+
+  - name: prometheus_alerts
+    interval: 30s
+    rules:
+      # Alert when Prometheus fails to scrape targets
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: monitoring
+          alert_type: availability
+        annotations:
+          summary: "Prometheus target is down"
+          description: "Prometheus cannot scrape {{ $labels.job }} on {{ $labels.instance }}."
+          impact: "Metrics collection is interrupted"
+          action: "Check target availability and network connectivity"
+
